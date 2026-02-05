@@ -87,7 +87,7 @@ tasks.named('processResources', ProcessResources).configure {
             mod_license: "All Rights Reserved",
             mod_version: "1.0",
             mod_authors: "sula008",
-            mod_description: "Zuzycie paliwa do pociagow Create."
+            mod_description: "Adds a fuel consumption system for Create trains and drills"
     ]
     inputs.properties replaceProperties
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
