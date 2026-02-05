@@ -1,0 +1,10 @@
+{
+  "modmenu.description.fuelmod": "Adds a fuel consumption system for Create trains.",
+  "fuelmod.bossbar.title": "Train Fuel",
+  "fuelmod.bossbar.fuel": "Fuel: %s / %s mB",
+  "fuelmod.bossbar.tools": " | Tools: %s",
+  "message.fuelmod.no_fuel": "§cTrain drills stopped - out of fuel!§r",
+  "commands.fuelmod.reload.success": "§a[FuelMod] Configuration reloaded successfully!§r",
+  "fuelmod.config.tool_drain": "Tool Fuel Drain (mB/s)",
+  "fuelmod.config.fuel_settings": "Fuel Fluid Settings and Base Consumption"
+}

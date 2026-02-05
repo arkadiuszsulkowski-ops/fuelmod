@@ -7,7 +7,7 @@ modId="fuelmod"
 version="1.0"
 displayName="Fuel Mod"
 authors="sula008"
-description='''Dodaje zużycie paliwa do pociągów.'''
+description='''Adds a fuel consumption system for Create trains and drills.'''
 
 [[dependencies.fuelmod]]
 modId="forge"

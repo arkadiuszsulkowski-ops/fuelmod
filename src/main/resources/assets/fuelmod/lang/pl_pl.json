@@ -1,0 +1,10 @@
+{
+  "modmenu.description.fuelmod": "Dodaje system zużycia paliwa dla pociągów z modu Create.",
+  "fuelmod.bossbar.title": "Paliwo pociągu",
+  "fuelmod.bossbar.fuel": "Paliwo: %s / %s mB",
+  "fuelmod.bossbar.tools": " | Maszyny: %s",
+  "message.fuelmod.no_fuel": "§cWiertła pociągu zatrzymane - brak paliwa!§r",
+  "commands.fuelmod.reload.success": "§a[FuelMod] Konfiguracja przeładowana pomyślnie!§r",
+  "fuelmod.config.tool_drain": "Zużycie paliwa przez maszyny (mB/s)",
+  "fuelmod.config.fuel_settings": "Lista paliw i ich bazowe zużycie"
+}

@@ -13,11 +13,13 @@ public class Fuelmod {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public Fuelmod() {
-
+        // Registering the mod on the Forge event bus
         MinecraftForge.EVENT_BUS.register(this);
 
+        // Registering the configuration file
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, FuelConfig.SPEC);
 
-        LOGGER.info("FuelMod załadowany pomyślnie!");
+        // Log message in English for server console clarity
+        LOGGER.info("FuelMod has been initialized successfully!");
     }
 }

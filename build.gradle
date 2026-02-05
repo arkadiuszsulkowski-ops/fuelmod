@@ -36,7 +36,7 @@ minecraft {
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
 
-            // Fix dla Mixinów i Javy 17
+
             arg "-mixin.config=fuelmod.mixins.json"
             property 'mixin.env.remapRefMap', 'true'
             property 'mixin.env.refMapElementFile', "${project.projectDir}/build/createSrgToMcp/output.srg"
@@ -64,11 +64,11 @@ repositories {
 dependencies {
     minecraft "net.minecraftforge:forge:1.20.1-47.4.16"
 
-    // Create 6.0.8 dla 1.20.1 (Plik z Twojego screena)
+
     implementation fg.deobf("curse.maven:create-328085:7178761")
     runtimeOnly fg.deobf("curse.maven:create-328085:7178761")
 
-    // Steam & Rails 1.6.4 (Najnowsza, która MOŻE zadziałać z 6.0.8)
+
     implementation fg.deobf("curse.maven:create-steam-and-rails-688231:7443695")
     runtimeOnly fg.deobf("curse.maven:create-steam-and-rails-688231:7443695")
 

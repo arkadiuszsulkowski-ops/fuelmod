@@ -21,7 +21,11 @@ public class FuelCommands {
                         .executes(context -> {
                             ConfigTracker.INSTANCE.configSets().get(ModConfig.Type.COMMON)
                                     .forEach(config -> config.getSpec().acceptConfig(config.getConfigData()));
-                            context.getSource().sendSuccess(() -> Component.literal("§a[FuelMod] Konfiguracja przeładowana!"), true);
+
+                            // Zmienione na Component.translatable
+                            context.getSource().sendSuccess(() ->
+                                    Component.translatable("commands.fuelmod.reload.success"), true);
+
                             return 1;
                         })
                 )

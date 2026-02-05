@@ -32,7 +32,7 @@ public abstract class TrainMixin {
 
     @Unique
     private final ServerBossEvent fuelmod$bossBar = new ServerBossEvent(
-            Component.literal("Paliwo pociągu"),
+            Component.translatable("fuelmod.bossbar.title"),
             BossEvent.BossBarColor.YELLOW,
             BossEvent.BossBarOverlay.PROGRESS
     );
@@ -113,8 +113,14 @@ public abstract class TrainMixin {
         else if (progress > 0.2f) fuelmod$bossBar.setColor(BossEvent.BossBarColor.YELLOW);
         else fuelmod$bossBar.setColor(BossEvent.BossBarColor.RED);
 
-        String toolInfo = tools > 0 ? " | Maszyny: " + tools : "";
-        fuelmod$bossBar.setName(Component.literal("Paliwo: " + current + " / " + max + " mB" + toolInfo));
+
+        Component fuelText = Component.translatable("fuelmod.bossbar.fuel", current, max);
+        if (tools > 0) {
+            Component toolText = Component.translatable("fuelmod.bossbar.tools", tools);
+            fuelmod$bossBar.setName(Component.literal("").append(fuelText).append(toolText));
+        } else {
+            fuelmod$bossBar.setName(fuelText);
+        }
     }
 
     @Unique
@@ -147,7 +153,7 @@ public abstract class TrainMixin {
 
 
         if (fuelmod$trackedPlayers.size() != currentPassengers.size()) {
-            // Musimy pobrać listę aktualnych graczy z BossBara i ich przefiltrować
+
             fuelmod$bossBar.getPlayers().forEach(player -> {
                 if (!currentPassengers.contains(player.getUUID())) {
                     fuelmod$bossBar.removePlayer(player);
