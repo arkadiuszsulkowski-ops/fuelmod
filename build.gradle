@@ -37,7 +37,8 @@ minecraft {
             property 'forge.logging.console.level', 'debug'
 
             // Dodaj to, aby Mixin wiedział jak szukać metod w kodzie Minecrafta/Create
-
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapElementFile', "${project.buildDir}/createSrgToMcp/output.srg"
 
             mods {
                 fuelmod {
