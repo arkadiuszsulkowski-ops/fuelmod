@@ -36,10 +36,8 @@ minecraft {
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
 
-            // --- DODAJ TE LINIE TUTAJ ---
-            property 'mixin.env.remapRefMap', 'true'
-            property 'mixin.env.refMapElementFile', "${project.buildDir}/createSrgToMcp/output.srg"
-            // ----------------------------
+            // Dodaj to, aby Mixin wiedział jak szukać metod w kodzie Minecrafta/Create
+
 
             mods {
                 fuelmod {

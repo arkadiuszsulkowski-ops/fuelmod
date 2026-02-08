@@ -11,12 +11,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = BlockBreakingMovementBehaviour.class, remap = false)
 public abstract class ToolDisablerMixin {
 
-
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void fuelmod$stopBreakingTick(MovementContext context, CallbackInfo ci) {
+        // Zawsze sprawdzaj null-safety, aby uniknąć "Ticking entity" crashu
+        if (context == null || context.contraption == null) {
+            return;
+        }
 
+        // Jeśli to NIE jest pociąg, po prostu wyjdź z metody (anuluj tick)
         if (!(context.contraption instanceof CarriageContraption)) {
-            context.data.putInt("BreakingPos", -1);
+            // Rezygnujemy z context.data.putInt, żeby nie wywalało błędu NoSuchMethodError
+            // Anulowanie ci wystarczy, by wiertło/piła nic nie zrobiły w tej klatce
             ci.cancel();
         }
     }

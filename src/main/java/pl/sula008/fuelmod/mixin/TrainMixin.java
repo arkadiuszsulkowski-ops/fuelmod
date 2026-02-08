@@ -1,15 +1,12 @@
 package pl.sula008.fuelmod.mixin;
 
-import com.simibubi.create.content.trains.entity.*;
 import com.simibubi.create.content.contraptions.behaviour.MovementContext;
-import com.simibubi.create.content.trains.entity.CarriageContraptionEntity;
-import net.minecraft.network.chat.Component;
+import com.simibubi.create.content.trains.entity.*;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerBossEvent;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.BossEvent;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -20,208 +17,229 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import pl.sula008.fuelmod.FuelConfig;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
-
 @Mixin(value = Train.class, remap = false)
 public abstract class TrainMixin {
 
-    @Unique
-    private int fuelmod$tickCounter = 0;
+    /* =========================
+       STAN PALIWA (SERWER)
+       ========================= */
 
-    @Unique
-    private final ServerBossEvent fuelmod$bossBar = new ServerBossEvent(
-            Component.translatable("fuelmod.bossbar.title"),
-            BossEvent.BossBarColor.YELLOW,
-            BossEvent.BossBarOverlay.PROGRESS
-    );
+    @Unique private long fuelmod$currentFuel = 0;
+    @Unique private long fuelmod$maxFuel = 0;
 
-    @Unique
-    private final Set<UUID> fuelmod$trackedPlayers = new HashSet<>();
+    @Unique private int fuelmod$tickCounter = 0;
+
+    /* =========================
+       TICK
+       ========================= */
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void fuelmod$onTick(CallbackInfo ci) {
         Train train = (Train) (Object) this;
 
-
-        fuelmod$manageBossBarPlayers(train);
-
-
         fuelmod$tickCounter++;
-        if (fuelmod$tickCounter >= 20) {
-            fuelmod$tickCounter = 0;
+        if (fuelmod$tickCounter >= 20) { // 1 sekunda
             fuelmod$runFuelLogic(train);
+            fuelmod$tickCounter = 0;
+        }
+
+        if (train.carriages == null) return;
+
+        if (fuelmod$currentFuel <= 0) {
+            train.throttle = 0;
+            train.speed = 0;
         }
     }
 
+    /* =========================
+       LOGIKA PALIWA
+       ========================= */
+
     @Unique
     private void fuelmod$runFuelLogic(Train train) {
+        if (train.carriages == null) return;
+
         long currentFuel = 0;
         long maxFuel = 0;
         boolean hasTank = false;
         int activeTools = 0;
         int drainRate = 0;
 
-        if (train.carriages == null) return;
-
         for (Carriage carriage : train.carriages) {
-            if (fuelmod$hasBlock(carriage, "railways:fuel_tank")) hasTank = true;
+            if (fuelmod$hasBlock(carriage, "railways:fuel_tank")) {
+                hasTank = true;
+            }
+
             activeTools += fuelmod$countTools(carriage);
 
-            IFluidHandler fluids = carriage.storage.getFluids();
-            if (fluids != null) {
-                for (int i = 0; i < fluids.getTanks(); i++) {
-                    FluidStack stack = fluids.getFluidInTank(i);
-                    int rate = fuelmod$getRate(stack);
-                    if (rate > 0) {
-                        drainRate = rate;
-                        currentFuel += stack.getAmount();
-                        maxFuel += fluids.getTankCapacity(i);
-                    }
+            IFluidHandler handler = carriage.storage.getFluids();
+            if (handler == null) continue;
+
+            for (int i = 0; i < handler.getTanks(); i++) {
+                FluidStack stack = handler.getFluidInTank(i);
+                int rate = fuelmod$getRate(stack.getFluid());
+
+                if (!stack.isEmpty() && rate > 0) {
+                    drainRate = rate;
+                    currentFuel += stack.getAmount();
+                    maxFuel += handler.getTankCapacity(i);
                 }
             }
         }
 
         if (hasTank && currentFuel > 0 && Math.abs(train.speed) > 0.01) {
-            int toDrain = drainRate + (activeTools * FuelConfig.TOOL_DRAIN_PER_SECOND.get().intValue());
+            int toDrain = drainRate +
+                    activeTools * FuelConfig.TOOL_DRAIN_PER_SECOND.get().intValue();
+
             if (toDrain > 0) {
                 fuelmod$drainFromTanks(train, toDrain);
                 currentFuel -= toDrain;
             }
         }
 
-        fuelmod$updateBossBar(currentFuel, maxFuel, hasTank, activeTools);
-
-        if (!hasTank || (currentFuel <= 0)) {
-            train.throttle = 0;
-        }
+        // zapis stanu (BEZ UI)
+        fuelmod$currentFuel = Math.max(currentFuel, 0);
+        fuelmod$maxFuel = maxFuel;
     }
 
+    /* =========================
+       LICZENIE NARZĘDZI
+       ========================= */
+
     @Unique
-    private void fuelmod$updateBossBar(long current, long max, boolean hasTank, int tools) {
-        if (!hasTank || max <= 0) {
-            fuelmod$bossBar.setVisible(false);
-            return;
+    private int fuelmod$countTools(Carriage carriage) {
+        int count = 0;
+
+        Entity entity = carriage.anyAvailableEntity();
+        if (!(entity instanceof CarriageContraptionEntity cce)) return 0;
+        if (!(cce.getContraption() instanceof CarriageContraption cc)) return 0;
+
+        for (var pair : cc.getActors()) {
+            MovementContext ctx = pair.right;
+            if (ctx == null || ctx.disabled || ctx.state == null) continue;
+
+            try {
+                var blockField = ctx.state.getClass().getDeclaredField("f_60608_");
+                blockField.setAccessible(true);
+
+                var block =
+                        (net.minecraft.world.level.block.Block) blockField.get(ctx.state);
+
+                ResourceLocation id = ForgeRegistries.BLOCKS.getKey(block);
+                if (id != null) {
+                    String s = id.toString();
+                    if (s.contains("drill") || s.contains("saw")) {
+                        count++;
+                    }
+                }
+            } catch (Exception ignored) {}
         }
-
-        float progress = Math.min(1.0f, Math.max(0.0f, (float) current / (float) max));
-        fuelmod$bossBar.setProgress(progress);
-        fuelmod$bossBar.setVisible(true);
-
-        if (progress > 0.6f) fuelmod$bossBar.setColor(BossEvent.BossBarColor.GREEN);
-        else if (progress > 0.2f) fuelmod$bossBar.setColor(BossEvent.BossBarColor.YELLOW);
-        else fuelmod$bossBar.setColor(BossEvent.BossBarColor.RED);
-
-
-        Component fuelText = Component.translatable("fuelmod.bossbar.fuel", current, max);
-        if (tools > 0) {
-            Component toolText = Component.translatable("fuelmod.bossbar.tools", tools);
-            fuelmod$bossBar.setName(Component.literal("").append(fuelText).append(toolText));
-        } else {
-            fuelmod$bossBar.setName(fuelText);
-        }
+        return count;
     }
 
+    /* =========================
+       DRENAŻ PALIWA
+       ========================= */
+
     @Unique
-    private void fuelmod$manageBossBarPlayers(Train train) {
-        if (train.carriages == null) return;
-
-        Set<UUID> currentPassengers = new HashSet<>();
-        Set<ServerPlayer> playersToAdd = new HashSet<>();
-
+    private long fuelmod$drainFromTanks(Train train, long amount) {
+        long drained = 0;
+        if (train.carriages == null || amount <= 0) return 0;
 
         for (Carriage carriage : train.carriages) {
             Entity entity = carriage.anyAvailableEntity();
-            if (entity != null) {
-                for (Entity passenger : entity.getPassengers()) {
-                    if (passenger instanceof ServerPlayer player) {
-                        currentPassengers.add(player.getUUID());
-                        if (!fuelmod$trackedPlayers.contains(player.getUUID())) {
-                            playersToAdd.add(player);
+            if (!(entity instanceof CarriageContraptionEntity cce)) continue;
+            if (cce.getContraption() == null) continue;
+
+            Object contraption = cce.getContraption();
+
+            try {
+                for (var field : contraption.getClass().getDeclaredFields()) {
+                    if (!java.util.Map.class.isAssignableFrom(field.getType())) continue;
+
+                    field.setAccessible(true);
+                    Object mapObj = field.get(contraption);
+                    if (!(mapObj instanceof java.util.Map<?, ?> map)) continue;
+
+                    for (Object value : map.values()) {
+                        if (drained >= amount) break;
+                        if (!(value instanceof net.minecraft.world.level.block.entity.BlockEntity be)) continue;
+
+                        LazyOptional<IFluidHandler> cap =
+                                be.getCapability(ForgeCapabilities.FLUID_HANDLER);
+
+                        IFluidHandler handler = cap.orElse(null);
+                        if (handler == null) continue;
+
+                        for (int i = 0; i < handler.getTanks(); i++) {
+                            FluidStack stack = handler.getFluidInTank(i);
+                            if (stack.isEmpty()) continue;
+                            if (fuelmod$getRate(stack.getFluid()) <= 0) continue;
+
+                            int toDrain = (int) Math.min(stack.getAmount(), amount - drained);
+                            FluidStack out = handler.drain(toDrain, IFluidHandler.FluidAction.EXECUTE);
+                            drained += out.getAmount();
                         }
                     }
                 }
-            }
+            } catch (Exception ignored) {}
+
+            if (drained >= amount) break;
         }
-
-
-        for (ServerPlayer p : playersToAdd) {
-            fuelmod$bossBar.addPlayer(p);
-            fuelmod$trackedPlayers.add(p.getUUID());
-        }
-
-
-        if (fuelmod$trackedPlayers.size() != currentPassengers.size()) {
-
-            fuelmod$bossBar.getPlayers().forEach(player -> {
-                if (!currentPassengers.contains(player.getUUID())) {
-                    fuelmod$bossBar.removePlayer(player);
-                    fuelmod$trackedPlayers.remove(player.getUUID());
-                }
-            });
-        }
+        return drained;
     }
 
-    @Unique
-    private void fuelmod$drainFromTanks(Train train, int amount) {
-        int remaining = amount;
-        for (Carriage carriage : train.carriages) {
-            IFluidHandler fluids = carriage.storage.getFluids();
-            if (fluids != null) {
-                FluidStack drained = fluids.drain(remaining, IFluidHandler.FluidAction.EXECUTE);
-                if (!drained.isEmpty()) {
-                    remaining -= drained.getAmount();
-                    Entity entity = carriage.anyAvailableEntity();
-                    if (entity instanceof CarriageContraptionEntity cce && cce.level() != null) {
-                        cce.level().getChunkAt(cce.blockPosition()).setUnsaved(true);
-                    }
-                }
-            }
-            if (remaining <= 0) break;
-        }
-    }
+    /* =========================
+       RATE PALIWA
+       ========================= */
 
     @Unique
-    private int fuelmod$getRate(FluidStack stack) {
-        if (stack.isEmpty()) return -1;
-        ResourceLocation rl = ForgeRegistries.FLUIDS.getKey(stack.getFluid());
-        if (rl == null) return -1;
-        String id = rl.toString();
+    private int fuelmod$getRate(net.minecraft.world.level.material.Fluid fluid) {
+        if (fluid == null) return -1;
+
+        ResourceLocation id = ForgeRegistries.FLUIDS.getKey(fluid);
+        if (id == null) return -1;
+
         for (String entry : FuelConfig.FUEL_SETTINGS.get()) {
-            String[] parts = entry.split(",");
-            if (parts.length == 2 && parts[0].equalsIgnoreCase(id)) {
-                try { return Integer.parseInt(parts[1]); } catch (Exception e) { return 1; }
+            String[] p = entry.split(",");
+            if (p.length == 2 && p[0].equalsIgnoreCase(id.toString())) {
+                try {
+                    return Integer.parseInt(p[1].trim());
+                } catch (Exception ignored) {}
             }
         }
         return -1;
     }
 
-    @Unique
-    private int fuelmod$countTools(Carriage carriage) {
-        final int[] count = {0};
-        Entity entity = carriage.anyAvailableEntity();
-        if (entity instanceof CarriageContraptionEntity cce && cce.getContraption() instanceof CarriageContraption cc) {
-            cc.getActors().forEach(pair -> {
-                MovementContext ctx = pair.right;
-                if (ctx != null && ctx.state != null && !ctx.disabled) {
-                    ResourceLocation rl = ForgeRegistries.BLOCKS.getKey(ctx.state.getBlock());
-                    if (rl != null && (rl.toString().contains("drill") || rl.toString().contains("saw"))) {
-                        count[0]++;
-                    }
-                }
-            });
-        }
-        return count[0];
-    }
+    /* =========================
+       SPRAWDZANIE BLOKU
+       ========================= */
 
     @Unique
     private boolean fuelmod$hasBlock(Carriage carriage, String blockId) {
         Entity entity = carriage.anyAvailableEntity();
-        if (entity instanceof CarriageContraptionEntity cce && cce.getContraption() != null) {
-            for (StructureTemplate.StructureBlockInfo info : cce.getContraption().getBlocks().values()) {
-                ResourceLocation id = ForgeRegistries.BLOCKS.getKey(info.state().getBlock());
-                if (id != null && id.toString().equals(blockId)) return true;
+        if (!(entity instanceof CarriageContraptionEntity cce)) return false;
+        if (cce.getContraption() == null) return false;
+
+        for (StructureTemplate.StructureBlockInfo info :
+                cce.getContraption().getBlocks().values()) {
+
+            try {
+                var stateField = StructureTemplate.StructureBlockInfo.class
+                        .getDeclaredField("f_74596_");
+                stateField.setAccessible(true);
+
+                var state =
+                        (net.minecraft.world.level.block.state.BlockState) stateField.get(info);
+
+                ResourceLocation id = ForgeRegistries.BLOCKS.getKey(state.getBlock());
+                if (id != null && id.toString().equals(blockId)) {
+                    return true;
+                }
+            } catch (Exception e) {
+                if (info.toString().contains(blockId)) {
+                    return true;
+                }
             }
         }
         return false;
